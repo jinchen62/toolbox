@@ -3,7 +3,7 @@ transform.sequence failures(propagate) {
 
   // Get matmul op
   // ==========================================
-  %matmul = transform.structured.match ops{["linalg.matmul"]} in %variant_op : (!transform.any_op) -> !transform.any_op
+  %matmul = transform.structured.match ops{["linalg.matmul_transpose_a"]} in %variant_op : (!transform.any_op) -> !transform.any_op
 
   // Tile and distribute to workgroups
   // ==========================================
@@ -65,13 +65,6 @@ transform.sequence failures(propagate) {
   transform.apply_patterns to %func_3 { transform.apply_patterns.linalg.erase_unnecessary_inputs } : !transform.any_op
   %variant_op_3 = transform.iree.bufferize { target_gpu } %variant_op : (!transform.any_op) -> (!transform.any_op)
 
-  // Step 5. Pre-process the contract and transfer ops to put it in the right form.
-  // ===========================================================================
-  %func_2 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-  transform.apply_patterns to %func_2 {
-    transform.apply_patterns.iree.prepare_vector_to_amd_mma
-  } : !transform.any_op
-
   // Step 6. Post-bufferization vector distribution
   // ===========================================================================
   %func_7 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
@@ -94,10 +87,13 @@ transform.sequence failures(propagate) {
   transform.iree.apply_cse %func_8 : !transform.any_op
   transform.iree.apply_buffer_optimizations %func_8 : (!transform.any_op) -> ()
 
+  // Reduce bank conflicts by padding
+  // ==========================================
+  transform.iree.gpu_reduce_bank_conflicts %func_8 {padding_size_bits = 128} : (!transform.any_op) -> ()
+
   // Contract to WMMA using layout
   // ==========================================
   %func_9 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-  //transform.iree.erase_hal_descriptor_type_from_memref %func_9 : (!transform.any_op) -> ()
   %transformed_func = transform.iree.layout_analysis_and_distribution %func_9 : (!transform.any_op) -> (!transform.any_op)
   transform.iree.apply_cse %transformed_func : !transform.any_op
 
@@ -121,6 +117,14 @@ transform.sequence failures(propagate) {
   // Do pipelining
   // ==========================================
   %for_op = transform.structured.match ops{["scf.for"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-  %pipelined_for_op = transform.iree.gpu_pipelining %for_op {depth = 1, strategy = 1, peel_epilogue} : (!transform.any_op) -> (!transform.any_op)
+  %pipelined_for_op = transform.iree.gpu_pipelining %for_op {depth = 1, strategy = 0, peel_epilogue} : (!transform.any_op) -> (!transform.any_op)
+
+  // Step 5. Pre-process the contract and transfer ops to put it in the right form.
+  // ===========================================================================
+  %func_2 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
+  transform.iree.erase_hal_descriptor_type_from_memref %func_2 : (!transform.any_op) -> ()
+  transform.apply_patterns to %func_2 {
+    transform.apply_patterns.iree.prepare_vector_to_amd_mma
+  } : !transform.any_op
 
 }

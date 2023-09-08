@@ -68,15 +68,24 @@ def generate_mlir(args):
 
 def compile(args):
     command = ['../iree-build/tools/iree-compile',
-           '--iree-input-type=tm_tensor',
-           '--iree-vm-bytecode-module-output-format=flatbuffer-binary',
-           '--iree-hal-target-backends=rocm',
-           '--iree-rocm-target-chip=gfx1100',
-           '--iree-rocm-link-bc=true',
-           '--iree-rocm-bc-dir=/opt/rocm/amdgcn/bitcode',
            '--iree-hal-benchmark-dispatch-repeat-count=100',
            f'{args.fname}',
            '-o', 'matmul.vmfb']
+    rocm_flags = [
+       '--iree-hal-target-backends=rocm',
+       '--iree-rocm-target-chip=gfx1100',
+       '--iree-rocm-link-bc=true',
+       '--iree-rocm-bc-dir=/opt/rocm/amdgcn/bitcode',
+    ]
+    vulkan_flags = [
+       '--iree-hal-target-backends=vulkan',
+       #'--iree-vulkan-target-triple=adreno-a740-linux',
+       '--iree-vulkan-target-triple=rdna3-unknown-linux'
+    ]
+    if args.vulkan:
+        command += vulkan_flags
+    else:
+        command += rocm_flags
     if args.transform_dialect:
         command += ['--iree-codegen-llvmgpu-use-transform-dialect=matmul_spec.mlir',
                '--iree-codegen-llvmgpu-enable-transform-dialect-jit=false']
@@ -109,8 +118,9 @@ def validate(args):
     output_filename = f'output_m{args.m}_n{args.n}_k{args.k}.npy'
     with open(output_filename, 'wb') as f:
         np.save(f, output)
+    device = 'vulkan' if args.vulkan else 'rocm'
     command = ['../iree-build/tools/iree-run-module',
-           '--device=rocm',
+           f'--device={device}',
            '--module=matmul.vmfb',
            '--function="matmul"',
            f'--input=@{lhs_filename}',
@@ -122,13 +132,14 @@ def validate(args):
     
 def benchmark(args):
     global matmul_transpose_a, matmul_transpose_b
+    device = 'vulkan' if args.vulkan else 'rocm'
     if matmul_transpose_a:
         command = ['../iree-build/tools/iree-benchmark-module',
                '--module=matmul.vmfb',
                '--function=matmul',
                f'--input="{args.k}x{args.m}xf16"',
                f'--input="{args.k}x{args.n}xf16"',
-               '--device=rocm',
+               f'--device={device}',
                '--batch_size=100']
     elif matmul_transpose_b:
         command = ['../iree-build/tools/iree-benchmark-module',
@@ -136,7 +147,7 @@ def benchmark(args):
                '--function=matmul',
                f'--input="{args.m}x{args.k}xf16"',
                f'--input="{args.n}x{args.k}xf16"',
-               '--device=rocm',
+               f'--device={device}',
                '--batch_size=100']
     else:
         command = ['../iree-build/tools/iree-benchmark-module',
@@ -144,7 +155,7 @@ def benchmark(args):
                '--function=matmul',
                f'--input="{args.m}x{args.k}xf16"',
                f'--input="{args.k}x{args.n}xf16"',
-               '--device=rocm',
+               f'--device={device}',
                '--batch_size=100']
     out, err = execute_command(command)
     output = out.decode('utf-8')
@@ -166,6 +177,7 @@ parser.add_argument('-c', '--compile', action='store_true', help='Compile the pr
 parser.add_argument('-r', '--run', action='store_true', help='Run the program.')
 parser.add_argument('-b', '--benchmark', action='store_true', help='Benchmark the program.')
 parser.add_argument('-t', '--transform_dialect', action='store_true', help='Use td script')
+parser.add_argument('-v', '--vulkan', action='store_true', help='Use vulkan backend')
 
 args = parser.parse_args()
 

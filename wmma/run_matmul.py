@@ -74,6 +74,7 @@ def compile(args):
            '--iree-rocm-target-chip=gfx1100',
            '--iree-rocm-link-bc=true',
            '--iree-rocm-bc-dir=/opt/rocm/amdgcn/bitcode',
+           '--iree-hal-benchmark-dispatch-repeat-count=100',
            f'{args.fname}',
            '-o', 'matmul.vmfb']
     if args.transform_dialect:

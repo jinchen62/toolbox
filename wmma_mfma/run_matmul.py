@@ -3,6 +3,8 @@ import subprocess
 import numpy as np
 import re
 
+batch_size = 100
+
 def get_form(form):
     matmul_transpose_a = False
     matmul_transpose_b = False
@@ -10,38 +12,42 @@ def get_form(form):
     if form == 'mmt': matmul_transpose_b = True
     return matmul_transpose_a, matmul_transpose_b
 
-def generate_matmul_func(m, n, k, form):
+def generate_matmul_func(m, n, k, form, chip):
     """Generates the MxNxK matrix multiplication function in MLIR."""
     matmul_transpose_a, matmul_transpose_b = get_form(form)
+    it = 'f16'
+    ot = 'f32'
+    if args.chip == 'gfx1100':
+        ot = 'f16'
     if matmul_transpose_a:
         matmul_function = (\
-        f"func.func @matmul(%lhs: tensor<{k}x{m}xf16>, %rhs: tensor<{k}x{n}xf16>) -> tensor<{m}x{n}xf16> {{\n"
-        f"  %c0 = arith.constant 0.0 : f16\n"
-        f"  %init = tensor.empty() : tensor<{m}x{n}xf16>\n"
-        f"  %inital_result = linalg.fill ins(%c0 : f16) outs(%init : tensor<{m}x{n}xf16>) -> tensor<{m}x{n}xf16>\n"
-        f"  %result = linalg.matmul_transpose_a ins(%lhs, %rhs: tensor<{k}x{m}xf16>, tensor<{k}x{n}xf16>)\n"
-        f"             outs(%inital_result: tensor<{m}x{n}xf16>) -> tensor<{m}x{n}xf16>\n"
-        f"  return %result : tensor<{m}x{n}xf16>\n"
+        f"func.func @matmul(%lhs: tensor<{k}x{m}x{it}>, %rhs: tensor<{k}x{n}x{it}>) -> tensor<{m}x{n}x{ot}> {{\n"
+        f"  %c0 = arith.constant 0.0 : {ot}\n"
+        f"  %init = tensor.empty() : tensor<{m}x{n}x{ot}>\n"
+        f"  %inital_result = linalg.fill ins(%c0 : {ot}) outs(%init : tensor<{m}x{n}x{ot}>) -> tensor<{m}x{n}x{ot}>\n"
+        f"  %result = linalg.matmul_transpose_a ins(%lhs, %rhs: tensor<{k}x{m}x{it}>, tensor<{k}x{n}x{it}>)\n"
+        f"             outs(%inital_result: tensor<{m}x{n}x{ot}>) -> tensor<{m}x{n}xf16>\n"
+        f"  return %result : tensor<{m}x{n}x{ot}>\n"
         f"}}\n")
     elif matmul_transpose_b:
         matmul_function = (\
-        f"func.func @matmul(%lhs: tensor<{m}x{k}xf16>, %rhs: tensor<{n}x{k}xf16>) -> tensor<{m}x{n}xf16> {{\n"
-        f"  %c0 = arith.constant 0.0 : f16\n"
-        f"  %init = tensor.empty() : tensor<{m}x{n}xf16>\n"
-        f"  %inital_result = linalg.fill ins(%c0 : f16) outs(%init : tensor<{m}x{n}xf16>) -> tensor<{m}x{n}xf16>\n"
-        f"  %result = linalg.matmul_transpose_b ins(%lhs, %rhs: tensor<{m}x{k}xf16>, tensor<{n}x{k}xf16>)\n"
-        f"             outs(%inital_result: tensor<{m}x{n}xf16>) -> tensor<{m}x{n}xf16>\n"
-        f"  return %result : tensor<{m}x{n}xf16>\n"
+        f"func.func @matmul(%lhs: tensor<{m}x{k}x{it}>, %rhs: tensor<{n}x{k}x{it}>) -> tensor<{m}x{n}x{ot}> {{\n"
+        f"  %c0 = arith.constant 0.0 : {ot}\n"
+        f"  %init = tensor.empty() : tensor<{m}x{n}x{ot}>\n"
+        f"  %inital_result = linalg.fill ins(%c0 : {ot}) outs(%init : tensor<{m}x{n}x{ot}>) -> tensor<{m}x{n}x{ot}>\n"
+        f"  %result = linalg.matmul_transpose_b ins(%lhs, %rhs: tensor<{m}x{k}x{it}>, tensor<{n}x{k}x{it}>)\n"
+        f"             outs(%inital_result: tensor<{m}x{n}x{ot}>) -> tensor<{m}x{n}x{ot}>\n"
+        f"  return %result : tensor<{m}x{n}x{ot}>\n"
         f"}}\n")
     else:
         matmul_function = (\
-        f"func.func @matmul(%lhs: tensor<{m}x{k}xf16>, %rhs: tensor<{k}x{n}xf16>) -> tensor<{m}x{n}xf16> {{\n"
-        f"  %c0 = arith.constant 0.0 : f16\n"
-        f"  %init = tensor.empty() : tensor<{m}x{n}xf16>\n"
-        f"  %inital_result = linalg.fill ins(%c0 : f16) outs(%init : tensor<{m}x{n}xf16>) -> tensor<{m}x{n}xf16>\n"
-        f"  %result = linalg.matmul ins(%lhs, %rhs: tensor<{m}x{k}xf16>, tensor<{k}x{n}xf16>)\n"
-        f"             outs(%inital_result: tensor<{m}x{n}xf16>) -> tensor<{m}x{n}xf16>\n"
-        f"  return %result : tensor<{m}x{n}xf16>\n"
+        f"func.func @matmul(%lhs: tensor<{m}x{k}x{it}>, %rhs: tensor<{k}x{n}x{it}>) -> tensor<{m}x{n}x{ot}> {{\n"
+        f"  %c0 = arith.constant 0.0 : {ot}\n"
+        f"  %init = tensor.empty() : tensor<{m}x{n}x{ot}>\n"
+        f"  %inital_result = linalg.fill ins(%c0 : {ot}) outs(%init : tensor<{m}x{n}x{ot}>) -> tensor<{m}x{n}x{ot}>\n"
+        f"  %result = linalg.matmul ins(%lhs, %rhs: tensor<{m}x{k}x{it}>, tensor<{k}x{n}x{it}>)\n"
+        f"             outs(%inital_result: tensor<{m}x{n}x{ot}>) -> tensor<{m}x{n}x{ot}>\n"
+        f"  return %result : tensor<{m}x{n}x{ot}>\n"
         f"}}\n")
     return matmul_function
 
@@ -50,6 +56,7 @@ def execute_command(command, output_file=''):
 
     print('Executing command: ', command)
     print(' '.join(command))
+    print(command)
     out = None
     err = None
     if output_file != '':
@@ -63,7 +70,7 @@ def execute_command(command, output_file=''):
     return out, err
 
 def generate_mlir(args):
-    matmul_str = generate_matmul_func(args.m, args.n, args.k, args.mma_form)
+    matmul_str = generate_matmul_func(args.m, args.n, args.k, args.mma_form, args.chip)
     fname = f'matmul_m{args.m}_n{args.n}_k{args.k}.mlir'
     with open(fname, 'w') as f:
         f.write(matmul_str)
@@ -71,13 +78,14 @@ def generate_mlir(args):
 
 
 def compile(args):
+    global batch_size
     command = ['../iree-build/tools/iree-compile',
-           '--iree-hal-benchmark-dispatch-repeat-count=100',
+           f'--iree-hal-benchmark-dispatch-repeat-count={batch_size}',
            f'{args.fname}',
            '-o', 'matmul.vmfb']
     rocm_flags = [
        '--iree-hal-target-backends=rocm',
-       '--iree-rocm-target-chip=gfx1100',
+       f'--iree-rocm-target-chip={args.chip}',
        '--iree-rocm-link-bc=true',
        '--iree-rocm-bc-dir=/opt/rocm/amdgcn/bitcode',
     ]
@@ -91,12 +99,12 @@ def compile(args):
     else:
         command += rocm_flags
     if args.transform_dialect:
-        command += ['--iree-codegen-llvmgpu-use-transform-dialect=matmul_spec.mlir',
+        command += [f'--iree-codegen-llvmgpu-use-transform-dialect={args.spec_file}',
                '--iree-codegen-llvmgpu-enable-transform-dialect-jit=false']
     if args.dump:
         command += ['-mlir-print-ir-after-all',
                     '-mlir-disable-threading',
-                    '--iree-hal-dump-executable-binaries-to=/home/harsh/iree/tmp']
+                    '--iree-hal-dump-executable-intermediates-to=/home/harsh/iree/tmp']
     execute_command(command, 'mlirdump.txt')
 
 def validate(args):
@@ -115,11 +123,13 @@ def validate(args):
         output = np.matmul(lhs, rhs)
     lhs_filename = f'lhs_m{args.m}_n{args.n}_k{args.k}.npy'
     with open(lhs_filename, 'wb') as f:
-        np.save(f, lhs)
+        np.save(f, lhs.astype('float16'))
     rhs_filename = f'rhs_m{args.m}_n{args.n}_k{args.k}.npy'
     with open(rhs_filename, 'wb') as f:
-        np.save(f, rhs)
+        np.save(f, rhs.astype('float16'))
     output_filename = f'output_m{args.m}_n{args.n}_k{args.k}.npy'
+    if args.chip == 'gfx90a':
+        output = output.astype('float32')
     with open(output_filename, 'wb') as f:
         np.save(f, output)
     device = 'vulkan' if args.vulkan else 'rocm'
@@ -135,6 +145,7 @@ def validate(args):
     print(output)
     
 def benchmark(args):
+    global batch_size
     matmul_transpose_a, matmul_transpose_b = get_form(args.mma_form)
     device = 'vulkan' if args.vulkan else 'rocm'
     if matmul_transpose_a:
@@ -144,7 +155,7 @@ def benchmark(args):
                f'--input="{args.k}x{args.m}xf16"',
                f'--input="{args.k}x{args.n}xf16"',
                f'--device={device}',
-               '--batch_size=100']
+               f'--batch_size={batch_size}']
     elif matmul_transpose_b:
         command = ['../iree-build/tools/iree-benchmark-module',
                '--module=matmul.vmfb',
@@ -152,7 +163,7 @@ def benchmark(args):
                f'--input="{args.m}x{args.k}xf16"',
                f'--input="{args.n}x{args.k}xf16"',
                f'--device={device}',
-               '--batch_size=100']
+               f'--batch_size={batch_size}']
     else:
         command = ['../iree-build/tools/iree-benchmark-module',
                '--module=matmul.vmfb',
@@ -160,7 +171,7 @@ def benchmark(args):
                f'--input="{args.m}x{args.k}xf16"',
                f'--input="{args.k}x{args.n}xf16"',
                f'--device={device}',
-               '--batch_size=100']
+               f'--batch_size={batch_size}']
     out, err = execute_command(command)
     output = out.decode('utf-8')
     print(output)
@@ -182,7 +193,8 @@ parser.add_argument('-r', '--run', action='store_true', help='Run the program.')
 parser.add_argument('-b', '--benchmark', action='store_true', help='Benchmark the program.')
 parser.add_argument('-t', '--transform_dialect', action='store_true', help='Use td script')
 parser.add_argument('-v', '--vulkan', action='store_true', help='Use vulkan backend')
-parser.add_argument('-f', '--mma_form', choices=['mm', 'mmt', 'mtm'], default='mtm', nargs='?', const='mtm', help='MMA Form = mm, mmt, mtm')
+parser.add_argument('-f', '--mma_form', choices=['mm', 'mmt', 'mtm'], default='mtm', nargs='?', const='mmt', help='MMA Form = mm, mmt, mtm')
+parser.add_argument('-x', '--chip', choices=['gfx1100', 'gfx90a'], default='gfx90a', nargs='?', const='mtm', help='Supported chips = gfx1100, gfx90a')
 
 args = parser.parse_args()
 
@@ -194,6 +206,7 @@ elif args.mma_form == 'mmt':
     print("MMA is of the form : A * transpose(B)")
 else:
     print("MMA is of the form : A * B")
+print(f"Compiling for {args.chip}")
 
 if args.compile:
     print('Compiling the program...')

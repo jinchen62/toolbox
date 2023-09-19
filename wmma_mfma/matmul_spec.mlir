@@ -3,12 +3,12 @@ transform.sequence failures(propagate) {
 
   // Get matmul op
   // ==========================================
-  %matmul = transform.structured.match ops{["linalg.matmul_transpose_a"]} in %variant_op : (!transform.any_op) -> !transform.any_op
+  %matmul = transform.structured.match ops{["linalg.matmul_transpose_b"]} in %variant_op : (!transform.any_op) -> !transform.any_op
 
   // Tile and distribute to workgroups
   // ==========================================
   %forall_grid, %tiled_matmul =
-  transform.structured.tile_to_forall_op %matmul tile_sizes [128, 64]
+  transform.structured.tile_to_forall_op %matmul tile_sizes [64, 128]
     ( mapping = [#gpu.block<x>, #gpu.block<y>] ) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
   transform.iree.populate_workgroup_count_region_using_num_threads_slice %forall_grid : (!transform.any_op) -> ()
 

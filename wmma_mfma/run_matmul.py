@@ -101,9 +101,12 @@ def compile(args):
     if args.transform_dialect:
         command += [f'--iree-codegen-llvmgpu-use-transform-dialect={args.spec_file}',
                '--iree-codegen-llvmgpu-enable-transform-dialect-jit=false']
+    if args.exec_dump:
+        command += ['--iree-hal-dump-executable-binaries-to=/home/harsh/iree/tmp']
     if args.dump:
         command += ['-mlir-print-ir-after-all',
                     '-mlir-disable-threading',
+                    '--iree-hal-dump-executable-binaries-to=/home/harsh/iree/tmp',
                     '--iree-hal-dump-executable-intermediates-to=/home/harsh/iree/tmp']
     execute_command(command, 'mlirdump.txt')
 
@@ -188,6 +191,7 @@ parser.add_argument('-m', help='matrix M shape.')
 parser.add_argument('-n', help='matrix N shape.')
 parser.add_argument('-k', help='matrix K shape.')
 parser.add_argument('-d', '--dump', action='store_true', help='Dump the ir after all.')
+parser.add_argument('-e', '--exec_dump', action='store_true', help='Dump the executable binary.')
 parser.add_argument('-c', '--compile', action='store_true', help='Compile the program.')
 parser.add_argument('-r', '--run', action='store_true', help='Run the program.')
 parser.add_argument('-b', '--benchmark', action='store_true', help='Benchmark the program.')

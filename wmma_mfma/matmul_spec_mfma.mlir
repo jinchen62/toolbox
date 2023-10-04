@@ -8,7 +8,7 @@ transform.sequence failures(propagate) {
   // Tile and distribute to workgroups
   // ==========================================
   %forall_grid, %tiled_matmul =
-  transform.structured.tile_to_forall_op %matmul tile_sizes [128, 128]
+  transform.structured.tile_to_forall_op %matmul tile_sizes [128, 256]
     ( mapping = [#gpu.block<x>, #gpu.block<y>] ) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
   transform.iree.populate_workgroup_count_region_using_num_threads_slice %forall_grid : (!transform.any_op) -> ()
 
@@ -69,7 +69,7 @@ transform.sequence failures(propagate) {
   // ===========================================================================
   %func_7 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
   transform.iree.forall_to_workgroup %func_7 : (!transform.any_op) -> ()
-  transform.iree.map_nested_forall_to_gpu_threads %func_7 workgroup_dims = [64, 4, 1] subgroup_size = 64 : (!transform.any_op) -> ()
+  transform.iree.map_nested_forall_to_gpu_threads %func_7 workgroup_dims = [64, 8, 1] subgroup_size = 64 : (!transform.any_op) -> ()
 
   transform.apply_patterns to %func_7 {
      transform.apply_patterns.memref.fold_memref_alias_ops
@@ -97,17 +97,20 @@ transform.sequence failures(propagate) {
   %new_contract = transform.iree.fold_ext_into_contraction %contract : (!transform.any_op) -> (!transform.any_op)
   transform.iree.apply_cse %func_8 : !transform.any_op
 
+  // Eliminate redundant barriers
+  // ==========================================
+  transform.iree.eliminate_gpu_barriers %func_8 : (!transform.any_op) -> !transform.any_op
+
   // Contract to WMMA using layout
   // ==========================================
   %func_9 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
   %transformed_func = transform.iree.layout_analysis_and_distribution %func_9 { use_mfma = true } : (!transform.any_op) -> (!transform.any_op)
   transform.iree.apply_cse %transformed_func : !transform.any_op
 
-  // Do multi-buffering (num_buffers = pipeline_depth + 1)
-  // For now, pipeline depth = 1
+  // Interleave the mma + loads
   // ==========================================
-  %func_4 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-  transform.iree.gpu_multi_buffering %func_4 {num_buffers = 2, skip_override_analysis = true} : (!transform.any_op) -> ()
+  //%func_20 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
+  //transform.iree.schedule %func_20 : (!transform.any_op) -> ()
 
   // Distribute shared memory copies
   // ==========================================
@@ -120,10 +123,30 @@ transform.sequence failures(propagate) {
     } : !transform.any_op
   transform.iree.apply_cse %func_10 : !transform.any_op
 
+  // Swizzle shared memory
+  // ==========================================
+  %func_20 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
+  transform.apply_patterns to %func_20 {
+      transform.apply_patterns.memref.fold_memref_alias_ops
+      transform.apply_patterns.canonicalization
+    } : !transform.any_op
+  transform.iree.optimize_shared_memory_reads_and_writes %func_20 : (!transform.any_op) -> ()
+
+  // Do multi-buffering (num_buffers = pipeline_depth + 1)
+  // For now, pipeline depth = 1
+  // ==========================================
+  %func_4 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
+  transform.iree.gpu_multi_buffering %func_4 {num_buffers = 2, skip_override_analysis = true} : (!transform.any_op) -> ()
+  transform.apply_patterns to %func_4 {
+      transform.apply_patterns.memref.fold_memref_alias_ops
+      transform.apply_patterns.canonicalization
+    } : !transform.any_op
+  transform.iree.optimize_shared_memory_reads_and_writes %func_20 : (!transform.any_op) -> ()
+
   // Pack shared memory alloc
   // ==========================================
-  transform.iree.pack_shared_memory_alloc %func_10 : (!transform.any_op) -> ()
-  transform.iree.apply_cse %func_10 : !transform.any_op
+  // transform.iree.pack_shared_memory_alloc %func_10 : (!transform.any_op) -> ()
+  // transform.iree.apply_cse %func_10 : !transform.any_op
 
   // Do pipelining
   // ==========================================

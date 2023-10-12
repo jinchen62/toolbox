@@ -125,14 +125,14 @@ transform.sequence failures(propagate) {
 
   // Swizzle shared memory
   // ==========================================
-  %func_20 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-  transform.apply_patterns to %func_20 {
-      transform.apply_patterns.memref.fold_memref_alias_ops
-      transform.apply_patterns.canonicalization
-    } : !transform.any_op
-  transform.iree.optimize_shared_memory_reads_and_writes %func_20 : (!transform.any_op) -> ()
+  //%func_20 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
+  //transform.apply_patterns to %func_20 {
+  //    transform.apply_patterns.memref.fold_memref_alias_ops
+  //    transform.apply_patterns.canonicalization
+  //  } : !transform.any_op
+  //transform.iree.optimize_shared_memory_reads_and_writes %func_20 : (!transform.any_op) -> ()
 
-  // Do multi-buffering (num_buffers = pipeline_depth + 1)
+  // Do multi-buffering (num_buffers = pipeline_depth + 1 for loadStoreStage0 (strategy = 1))
   // For now, pipeline depth = 1
   // ==========================================
   %func_4 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
@@ -141,7 +141,6 @@ transform.sequence failures(propagate) {
       transform.apply_patterns.memref.fold_memref_alias_ops
       transform.apply_patterns.canonicalization
     } : !transform.any_op
-  transform.iree.optimize_shared_memory_reads_and_writes %func_20 : (!transform.any_op) -> ()
 
   // Pack shared memory alloc
   // ==========================================
@@ -151,7 +150,7 @@ transform.sequence failures(propagate) {
   // Do pipelining
   // ==========================================
   %for_op = transform.structured.match ops{["scf.for"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-  %pipelined_for_op = transform.iree.gpu_pipelining %for_op {depth = 1, strategy = 1, peel_epilogue} : (!transform.any_op) -> (!transform.any_op)
+  %pipelined_for_op = transform.iree.gpu_pipelining %for_op {depth = 2, strategy = 0, peel_epilogue} : (!transform.any_op) -> (!transform.any_op)
 
   // Step 5. Pre-process the contract and transfer ops to put it in the right form.
   // ===========================================================================
@@ -160,5 +159,5 @@ transform.sequence failures(propagate) {
   transform.apply_patterns to %func_2 {
     transform.apply_patterns.iree.prepare_vector_to_amd_mma
   } : !transform.any_op
-
+ 
 }

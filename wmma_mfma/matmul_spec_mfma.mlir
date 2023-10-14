@@ -89,7 +89,7 @@ transform.sequence failures(propagate) {
 
   // Reduce bank conflicts by padding
   // ==========================================
-  transform.iree.gpu_reduce_bank_conflicts %func_8 {padding_size_bits = 128} : (!transform.any_op) -> ()
+  //transform.iree.gpu_reduce_bank_conflicts %func_8 {padding_size_bits = 128} : (!transform.any_op) -> ()
 
   // Fold ExtF into vector.contract
   // ==========================================
@@ -125,12 +125,12 @@ transform.sequence failures(propagate) {
 
   // Swizzle shared memory
   // ==========================================
-  //%func_20 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-  //transform.apply_patterns to %func_20 {
-  //    transform.apply_patterns.memref.fold_memref_alias_ops
-  //    transform.apply_patterns.canonicalization
-  //  } : !transform.any_op
-  //transform.iree.optimize_shared_memory_reads_and_writes %func_20 : (!transform.any_op) -> ()
+  %func_20 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
+  transform.apply_patterns to %func_20 {
+      transform.apply_patterns.memref.fold_memref_alias_ops
+      transform.apply_patterns.canonicalization
+    } : !transform.any_op
+  transform.iree.optimize_shared_memory_reads_and_writes %func_20 : (!transform.any_op) -> ()
 
   // Do multi-buffering (num_buffers = pipeline_depth + 1 for loadStoreStage0 (strategy = 1))
   // For now, pipeline depth = 1

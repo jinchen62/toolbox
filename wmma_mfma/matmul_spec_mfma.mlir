@@ -89,7 +89,7 @@ transform.sequence failures(propagate) {
 
   // Reduce bank conflicts by padding
   // ==========================================
-  //transform.iree.gpu_reduce_bank_conflicts %func_8 {padding_size_bits = 128} : (!transform.any_op) -> ()
+  // transform.iree.gpu_reduce_bank_conflicts %func_8 {padding_size_bits = 128} : (!transform.any_op) -> ()
 
   // Fold ExtF into vector.contract
   // ==========================================
@@ -106,11 +106,6 @@ transform.sequence failures(propagate) {
   %func_9 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
   %transformed_func = transform.iree.layout_analysis_and_distribution %func_9 { use_mfma = true } : (!transform.any_op) -> (!transform.any_op)
   transform.iree.apply_cse %transformed_func : !transform.any_op
-
-  // Interleave the mma + loads
-  // ==========================================
-  //%func_20 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-  //transform.iree.schedule %func_20 : (!transform.any_op) -> ()
 
   // Distribute shared memory copies
   // ==========================================
@@ -135,12 +130,12 @@ transform.sequence failures(propagate) {
   // Do multi-buffering (num_buffers = pipeline_depth + 1 for loadStoreStage0 (strategy = 1))
   // For now, pipeline depth = 1
   // ==========================================
-  %func_4 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-  transform.iree.gpu_multi_buffering %func_4 {num_buffers = 2, skip_override_analysis = true} : (!transform.any_op) -> ()
-  transform.apply_patterns to %func_4 {
-      transform.apply_patterns.memref.fold_memref_alias_ops
-      transform.apply_patterns.canonicalization
-    } : !transform.any_op
+  //%func_4 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
+  //transform.iree.gpu_multi_buffering %func_4 {num_buffers = 2, skip_override_analysis = true} : (!transform.any_op) -> ()
+  //transform.apply_patterns to %func_4 {
+  //    transform.apply_patterns.memref.fold_memref_alias_ops
+  //    transform.apply_patterns.canonicalization
+  //  } : !transform.any_op
 
   // Pack shared memory alloc
   // ==========================================
@@ -150,7 +145,12 @@ transform.sequence failures(propagate) {
   // Do pipelining
   // ==========================================
   %for_op = transform.structured.match ops{["scf.for"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-  %pipelined_for_op = transform.iree.gpu_pipelining %for_op {depth = 2, strategy = 0, peel_epilogue} : (!transform.any_op) -> (!transform.any_op)
+  %pipelined_for_op = transform.iree.gpu_pipelining %for_op {depth = 1, strategy = 1, peel_epilogue} : (!transform.any_op) -> (!transform.any_op)
+
+  // Interleave the mma + loads, insert barriers since no multi-buffering
+  // ==========================================
+  %func_21 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
+  transform.iree.schedule %func_21 : (!transform.any_op) -> ()
 
   // Step 5. Pre-process the contract and transfer ops to put it in the right form.
   // ===========================================================================
@@ -159,5 +159,5 @@ transform.sequence failures(propagate) {
   transform.apply_patterns to %func_2 {
     transform.apply_patterns.iree.prepare_vector_to_amd_mma
   } : !transform.any_op
- 
+
 }

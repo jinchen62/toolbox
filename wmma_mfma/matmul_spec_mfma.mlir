@@ -8,7 +8,7 @@ transform.sequence failures(propagate) {
   // Tile and distribute to workgroups
   // ==========================================
   %forall_grid, %tiled_matmul =
-  transform.structured.tile_to_forall_op %matmul tile_sizes [128, 256]
+  transform.structured.tile_to_forall_op %matmul tile_sizes [256, 128]
     ( mapping = [#gpu.block<x>, #gpu.block<y>] ) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
   transform.iree.populate_workgroup_count_region_using_num_threads_slice %forall_grid : (!transform.any_op) -> ()
 

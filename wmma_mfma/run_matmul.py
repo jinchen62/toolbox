@@ -100,8 +100,9 @@ def compile(args):
     else:
         command += rocm_flags
     if args.transform_dialect:
-        command += [f'--iree-codegen-llvmgpu-use-transform-dialect={args.spec_file}',
-               '--iree-codegen-llvmgpu-enable-transform-dialect-jit=false']
+        command += [f'--iree-codegen-transform-dialect-library={args.spec_file}',
+                    '--iree-codegen-use-transform-dialect-strategy=codegen',
+                    '--iree-codegen-llvmgpu-enable-transform-dialect-jit=false']
     if args.exec_dump:
         command += [f'--iree-hal-dump-executable-binaries-to={os.getcwd()}/tmp']
     if args.dump:
@@ -147,7 +148,7 @@ def validate(args):
     out, err = execute_command(command)
     output = out.decode('utf-8')
     print(output)
-    
+
 def benchmark(args):
     global batch_size
     matmul_transpose_a, matmul_transpose_b = get_form(args.mma_form)
@@ -200,7 +201,7 @@ parser.add_argument('-t', '--transform_dialect', action='store_true', help='Use 
 parser.add_argument('-v', '--vulkan', action='store_true', help='Use vulkan backend')
 parser.add_argument('-f', '--mma_form', choices=['mm', 'mmt', 'mtm'], default='mtm', nargs='?', const='mmt', help='MMA Form = mm, mmt, mtm')
 parser.add_argument('-x', '--chip', choices=['gfx1100', 'gfx90a'], default='gfx90a', nargs='?', const='mtm', help='Supported chips = gfx1100, gfx90a')
-parser.add_argument('-ib', '--iree_build', default="../iree-build", help="Path to iree-built directory.")
+parser.add_argument('-ib', '--iree_build', default="../../iree-build", help="Path to iree-built directory.")
 
 try:
     os.makedirs("tmp")

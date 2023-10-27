@@ -79,7 +79,7 @@ def generate_mlir(args):
 
 def compile(args):
     global batch_size
-    command = ['../iree-build/tools/iree-compile',
+    command = ['../../iree-build/tools/iree-compile',
            f'--iree-hal-benchmark-dispatch-repeat-count={batch_size}',
            f'{args.fname}',
            '-o', 'matmul.vmfb']
@@ -102,7 +102,7 @@ def compile(args):
         command += [f'--iree-codegen-llvmgpu-use-transform-dialect={args.spec_file}',
                '--iree-codegen-llvmgpu-enable-transform-dialect-jit=false']
     if args.exec_dump:
-        command += ['--iree-hal-dump-executable-binaries-to=/home/harsh/iree/tmp']
+        command += ['--iree-hal-dump-executable-binaries-to=/home/jinchen/iree/tmp']
     if args.dump:
         command += ['-mlir-print-ir-after-all',
                     '-mlir-disable-threading',
@@ -136,7 +136,7 @@ def validate(args):
     with open(output_filename, 'wb') as f:
         np.save(f, output)
     device = 'vulkan' if args.vulkan else 'rocm'
-    command = ['../iree-build/tools/iree-run-module',
+    command = ['../../iree-build/tools/iree-run-module',
            f'--device={device}',
            '--module=matmul.vmfb',
            '--function="matmul"',
@@ -152,7 +152,7 @@ def benchmark(args):
     matmul_transpose_a, matmul_transpose_b = get_form(args.mma_form)
     device = 'vulkan' if args.vulkan else 'rocm'
     if matmul_transpose_a:
-        command = ['../iree-build/tools/iree-benchmark-module',
+        command = ['../../iree-build/tools/iree-benchmark-module',
                '--module=matmul.vmfb',
                '--function=matmul',
                f'--input="{args.k}x{args.m}xf16"',
@@ -160,7 +160,7 @@ def benchmark(args):
                f'--device={device}',
                f'--batch_size={batch_size}']
     elif matmul_transpose_b:
-        command = ['../iree-build/tools/iree-benchmark-module',
+        command = ['../../iree-build/tools/iree-benchmark-module',
                '--module=matmul.vmfb',
                '--function=matmul',
                f'--input="{args.m}x{args.k}xf16"',
@@ -168,7 +168,7 @@ def benchmark(args):
                f'--device={device}',
                f'--batch_size={batch_size}']
     else:
-        command = ['../iree-build/tools/iree-benchmark-module',
+        command = ['../../iree-build/tools/iree-benchmark-module',
                '--module=matmul.vmfb',
                '--function=matmul',
                f'--input="{args.m}x{args.k}xf16"',

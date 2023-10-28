@@ -149,8 +149,8 @@ transform.sequence failures(propagate) {
 
   // Interleave the mma + loads, insert barriers since no multi-buffering
   // ==========================================
-  %func_21 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-  transform.iree.schedule %func_21 : (!transform.any_op) -> ()
+  //%func_21 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
+  //transform.iree.schedule %func_21 : (!transform.any_op) -> ()
 
   // Step 5. Pre-process the contract and transfer ops to put it in the right form.
   // ===========================================================================

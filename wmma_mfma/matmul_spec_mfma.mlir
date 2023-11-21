@@ -4,11 +4,12 @@ module attributes { transform.with_named_sequence } {
     // Get matmul op
     // ==========================================
     %matmul = transform.structured.match ops{["linalg.matmul_transpose_b"]} in %variant_op : (!transform.any_op) -> !transform.any_op
+    %tile_sizes0, %tile_sizes1, %tile_sizes2 = transform.iree.create_tile_sizes %matmul : (!transform.any_op) -> (!transform.any_param, !transform.any_param, !transform.any_param)
 
     // Tile and distribute to workgroups
     // ==========================================
     %tiled_matmul, %forall_grid =
-    transform.structured.tile_using_forall %matmul tile_sizes [256, 128]
+    transform.structured.tile_using_forall %matmul tile_sizes *(%tile_sizes0 : !transform.any_param)
       ( mapping = [#gpu.block<x>, #gpu.block<y>] ) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
     transform.iree.populate_workgroup_count_region_using_num_threads_slice %forall_grid : (!transform.any_op) -> ()
 
@@ -23,7 +24,7 @@ module attributes { transform.with_named_sequence } {
     // Tile fill
     // ==========================================
     %fill2 = transform.structured.match ops{["linalg.fill"]} in %variant_op :  (!transform.any_op) -> !transform.any_op
-    %tiled_fill3, %forall3 = transform.structured.tile_using_forall %fill2 tile_sizes [64, 64] (mapping = [#gpu.warp<linear_dim_0>, #gpu.warp<linear_dim_1>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
+    %tiled_fill3, %forall3 = transform.structured.tile_using_forall %fill2 tile_sizes *(%tile_sizes1 : !transform.any_param) (mapping = [#gpu.warp<linear_dim_0>, #gpu.warp<linear_dim_1>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
 
     // Tile reduction dim
     // ==========================================
@@ -36,7 +37,7 @@ module attributes { transform.with_named_sequence } {
 
     // Tile to warps
     // ==========================================
-    %tiled_matmul3, %forall2 = transform.structured.tile_using_forall %promoted_matmul tile_sizes [64, 64] (mapping = [#gpu.warp<linear_dim_0>, #gpu.warp<linear_dim_1>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
+    %tiled_matmul3, %forall2 = transform.structured.tile_using_forall %promoted_matmul tile_sizes *(%tile_sizes2 : !transform.any_param) (mapping = [#gpu.warp<linear_dim_0>, #gpu.warp<linear_dim_1>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
     //transform.structured.fuse_into_containing_op %fill2 into %forall2 :
     //  (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
     //transform.iree.apply_cse %func0 : !transform.any_op

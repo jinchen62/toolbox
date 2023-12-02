@@ -3,7 +3,9 @@ module attributes { transform.with_named_sequence } {
 
     // Get matmul op
     // ==========================================
-    %matmul = transform.structured.match ops{["linalg.matmul_transpose_b"]} in %variant_op : (!transform.any_op) -> !transform.any_op
+    %matmul = transform.structured.match ops{["linalg.generic"]}
+              attributes{iterator_types = [#linalg.iterator_type<parallel>, #linalg.iterator_type<parallel>, #linalg.iterator_type<reduction>]}
+              in %variant_op : (!transform.any_op) -> !transform.any_op
     %tile_sizes0, %tile_sizes1, %tile_sizes2 = transform.iree.create_tile_sizes %matmul : (!transform.any_op) -> (!transform.any_param, !transform.any_param, !transform.any_param)
 
     // Tile and distribute to workgroups

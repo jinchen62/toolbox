@@ -1,11 +1,30 @@
 module attributes { transform.with_named_sequence } {
-  transform.named_sequence @codegen(%variant_op: !transform.any_op {transform.consumed}) {
+  transform.named_sequence @transform_codegen(%variant_op: !transform.any_op {transform.consumed}) {
+    transform.foreach_match in %variant_op
+        @match_matmul -> @transform_annotate
+      : (!transform.any_op) -> (!transform.any_op)
+    transform.yield
+  }
 
+  transform.named_sequence @match_matmul(%matmul: !transform.any_op {transform.readonly}) -> (!transform.any_op) {
+    transform.match.operation_name %matmul ["linalg.matmul_transpose_b"] : !transform.any_op
+    transform.yield %matmul : !transform.any_op
+  }
+
+  transform.named_sequence @transform_annotate(%matmul: !transform.any_op {transform.readonly}) {
+    %variant_op = transform.get_parent_op %matmul {op_name = "hal.executable.variant"} : (!transform.any_op) -> !transform.any_op
+    %exports = transform.structured.match ops{["hal.executable.export"]} in %variant_op : (!transform.any_op) -> !transform.any_op
+    %transform_config = transform.param.constant #iree_codegen.translation_info<TransformDialectCodegen codegen_spec = @__transform_main> -> !transform.any_param
+    transform.annotate %exports "translation_info" = %transform_config : !transform.any_op, !transform.any_param
+    transform.yield
+  }
+
+  transform.named_sequence @__transform_main(%variant_op: !transform.any_op {transform.consumed}) {
     // Get matmul op
     // ==========================================
     %matmul = transform.structured.match ops{["linalg.generic"]}
-              attributes{iterator_types = [#linalg.iterator_type<parallel>, #linalg.iterator_type<parallel>, #linalg.iterator_type<reduction>]}
-              in %variant_op : (!transform.any_op) -> !transform.any_op
+      attributes{iterator_types = [#linalg.iterator_type<parallel>, #linalg.iterator_type<parallel>, #linalg.iterator_type<reduction>]}
+      in %variant_op : (!transform.any_op) -> !transform.any_op
     %tile_sizes0, %tile_sizes1, %tile_sizes2 = transform.iree.create_tile_sizes %matmul : (!transform.any_op) -> (!transform.any_param, !transform.any_param, !transform.any_param)
 
     // Tile and distribute to workgroups

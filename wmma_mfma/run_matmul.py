@@ -101,7 +101,7 @@ def compile(args):
         command += rocm_flags
     if args.transform_dialect:
         command += [f'--iree-codegen-transform-dialect-library={args.spec_file}',
-                    '--iree-codegen-use-transform-dialect-strategy=codegen',
+                    '--iree-codegen-use-transform-dialect-configuration=transform_codegen',
                     '--iree-codegen-llvmgpu-enable-transform-dialect-jit=false']
     if args.exec_dump:
         command += [f'--iree-hal-dump-executable-binaries-to={os.getcwd()}/tmp']

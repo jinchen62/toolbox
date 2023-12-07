@@ -6,8 +6,17 @@ module attributes { transform.with_named_sequence } {
     transform.yield
   }
 
-  transform.named_sequence @match_matmul(%matmul: !transform.any_op {transform.readonly}) -> (!transform.any_op) {
-    transform.match.operation_name %matmul ["linalg.matmul_transpose_b"] : !transform.any_op
+  transform.named_sequence @match_matmul(%entry: !transform.any_op {transform.readonly}) -> (!transform.any_op) {
+    %c64 = transform.param.constant 64 : i64 -> !transform.param<i64>
+    %matmul = transform.match.structured %entry : (!transform.any_op) -> (!transform.any_op) {
+    ^bb0(%struct: !transform.any_op):
+      transform.match.operation_name %struct ["linalg.matmul_transpose_b"] : !transform.any_op
+      %res = transform.match.structured.result %struct[0] {single} : (!transform.any_op) -> !transform.any_op
+      transform.match.operation_name %res ["flow.dispatch.tensor.store"] : !transform.any_op
+      %dim = transform.match.structured.dim %struct[0] {parallel} : (!transform.any_op) -> !transform.param<i64>
+      transform.match.param.cmpi ge %dim, %c64 : !transform.param<i64>
+      transform.match.structured.yield %struct : !transform.any_op
+    }
     transform.yield %matmul : !transform.any_op
   }
 
@@ -25,7 +34,7 @@ module attributes { transform.with_named_sequence } {
     %matmul = transform.structured.match ops{["linalg.generic"]}
       attributes{iterator_types = [#linalg.iterator_type<parallel>, #linalg.iterator_type<parallel>, #linalg.iterator_type<reduction>]}
       in %variant_op : (!transform.any_op) -> !transform.any_op
-    %tile_sizes0, %tile_sizes1, %tile_sizes2 = transform.iree.create_tile_sizes %matmul : (!transform.any_op) -> (!transform.any_param, !transform.any_param, !transform.any_param)
+    %tile_sizes0, %tile_sizes1 = transform.iree.create_tile_sizes %matmul : (!transform.any_op) -> (!transform.any_param, !transform.any_param)
 
     // Tile and distribute to workgroups
     // ==========================================
@@ -58,7 +67,7 @@ module attributes { transform.with_named_sequence } {
 
     // Tile to warps
     // ==========================================
-    %tiled_matmul3, %forall2 = transform.structured.tile_using_forall %promoted_matmul tile_sizes *(%tile_sizes2 : !transform.any_param) (mapping = [#gpu.warp<linear_dim_0>, #gpu.warp<linear_dim_1>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
+    %tiled_matmul3, %forall2 = transform.structured.tile_using_forall %promoted_matmul tile_sizes *(%tile_sizes1 : !transform.any_param) (mapping = [#gpu.warp<linear_dim_0>, #gpu.warp<linear_dim_1>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
     //transform.structured.fuse_into_containing_op %fill2 into %forall2 :
     //  (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
     //transform.iree.apply_cse %func0 : !transform.any_op
@@ -116,7 +125,7 @@ module attributes { transform.with_named_sequence } {
     // Fold ExtF into vector.contract
     // ==========================================
     %contract = transform.structured.match ops{["vector.contract"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-    %new_contract = transform.iree.fold_ext_into_contraction %contract : (!transform.any_op) -> (!transform.any_op)
+    // %new_contract = transform.iree.fold_ext_into_contraction %contract : (!transform.any_op) -> (!transform.any_op)
     transform.iree.apply_cse %func_8 : !transform.any_op
 
     // Eliminate redundant barriers

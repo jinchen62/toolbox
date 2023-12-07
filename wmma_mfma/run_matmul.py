@@ -201,7 +201,7 @@ parser.add_argument('-t', '--transform_dialect', action='store_true', help='Use 
 parser.add_argument('-v', '--vulkan', action='store_true', help='Use vulkan backend')
 parser.add_argument('-f', '--mma_form', choices=['mm', 'mmt', 'mtm'], default='mtm', nargs='?', const='mmt', help='MMA Form = mm, mmt, mtm')
 parser.add_argument('-x', '--chip', choices=['gfx1100', 'gfx90a'], default='gfx90a', nargs='?', const='mtm', help='Supported chips = gfx1100, gfx90a')
-parser.add_argument('-ib', '--iree_build', default="../../iree-build", help="Path to iree-built directory.")
+parser.add_argument('-ib', '--iree_build', default="../iree-build", help="Path to iree-built directory.")
 
 try:
     os.makedirs("tmp")

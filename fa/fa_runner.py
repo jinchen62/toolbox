@@ -155,18 +155,18 @@ def validate(args):
       f'{args.iree_build_dir}/tools/iree-run-module',\
       '--module=' + get_vmfb_file(args),\
       f'--function={Hyperparameters.FUNC_NAME}',\
-      f'--input="@query_{args.shape}.npy"',\
-      f'--input="@key_{args.shape}.npy"',\
-      f'--input="@value_{args.shape}.npy"',\
+      f'--input=@query_{args.shape}.npy',\
+      f'--input=@key_{args.shape}.npy',\
+      f'--input=@value_{args.shape}.npy',\
       f'--device={args.backend}',\
-      '--output=@computed_{args.shape}.npy'
+      f'--output=@computed_{args.shape}.npy'
     ]
     execute_command(flags)
     check_result(args)
 
 def extract_time(out):
     output = out.decode('utf-8')
-    logger.info(output)
+    logger.info("\n" + output)
     time_in_ms = float(re.findall(r"[-+]?(?:\d*\.*\d+)", output.split('\n')[3])[0])
     return time_in_ms
 
@@ -198,8 +198,8 @@ def benchmark(args):
         logger.warning("Failed to extract metrics!")
         return
     time_in_ms = extract_time(out)
-    tflops = compute_tflops(*split_shape, time_in_ms)
-    logger.info("Throughput (TFLOPS/s) = " + tflops)
+    tflops = compute_tflops(*split_shape(args), time_in_ms)
+    logger.info("Throughput (TFLOPS/s) = " + str(tflops))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -238,7 +238,7 @@ if __name__ == "__main__":
                 self.print()
                 self.evaluate(args)
                 self.state += self.increment
-                if self.state >= self.end:
+                if self.state > self.end:
                     done = True
 
 

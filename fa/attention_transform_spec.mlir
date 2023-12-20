@@ -23,9 +23,9 @@ module attributes { transform.with_named_sequence } {
 
     // Promote query and output operands
     // ==========================================
-    %attention3 = transform.structured.match ops{["iree_linalg_ext.attention"]} in %variant_op : (!transform.any_op) -> !transform.any_op
-    %promoted_attention, %alloc_a0, %alloc_a1 = transform.iree.promote_operands %attention3 [0, 3]
-      : (!transform.any_op) -> (!transform.any_op, !transform.any_op, !transform.any_op)
+    //%attention3 = transform.structured.match ops{["iree_linalg_ext.attention"]} in %variant_op : (!transform.any_op) -> !transform.any_op
+    //%promoted_attention, %alloc_a0, %alloc_a1 = transform.iree.promote_operands %attention3 [0, 3]
+    //  : (!transform.any_op) -> (!transform.any_op, !transform.any_op, !transform.any_op)
 
     // Tile and decompose attention
     // ==========================================
@@ -38,14 +38,14 @@ module attributes { transform.with_named_sequence } {
 
     // Promote key and value operands
     // ==========================================
-    %promoted_first_matmul, %alloc0 = transform.iree.promote_operands %first_matmul [1]
-      : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
-    %promoted_second_matmul, %alloc1 = transform.iree.promote_operands %second_matmul [1]
-      : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
+    //%promoted_first_matmul, %alloc0 = transform.iree.promote_operands %first_matmul [1]
+    //  : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
+    //%promoted_second_matmul, %alloc1 = transform.iree.promote_operands %second_matmul [1]
+    //  : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
 
     // Tile and fuse attention ops
     // ==========================================
-    %tiled_matmul, %forall = transform.structured.tile_using_forall %promoted_second_matmul tile_sizes [64] (mapping = [#gpu.warp<linear_dim_0>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
+    %tiled_matmul, %forall = transform.structured.tile_using_forall %second_matmul tile_sizes [64] (mapping = [#gpu.warp<linear_dim_0>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
     %tiled_reduce_sum, %forall_reduce = transform.structured.tile_using_forall %reduce_sum tile_sizes [64] (mapping = [#gpu.warp<linear_dim_0>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
 
 
@@ -66,7 +66,7 @@ module attributes { transform.with_named_sequence } {
     transform.iree.apply_cse %func : !transform.any_op
 
     %f7, %loop7 = transform.structured.fuse_into_containing_op %reduce_max into %loop6 : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
-    %f8, %loop8 = transform.structured.fuse_into_containing_op %promoted_first_matmul into %loop7 : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
+    %f8, %loop8 = transform.structured.fuse_into_containing_op %first_matmul into %loop7 : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
     transform.apply_patterns to %func {
       transform.apply_patterns.canonicalization
     } : !transform.any_op
@@ -167,14 +167,14 @@ module attributes { transform.with_named_sequence } {
 
     // Distribute shared memory copies
     // ==========================================
-    %func_10 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-    transform.iree.gpu_distribute_shared_memory_copy %func_10 : (!transform.any_op) -> ()
-    transform.apply_patterns to %func_10 {
-        transform.apply_patterns.memref.fold_memref_alias_ops
-        transform.apply_patterns.canonicalization
-        transform.apply_patterns.linalg.tiling_canonicalization
-      } : !transform.any_op
-    transform.iree.apply_cse %func_10 : !transform.any_op
+    //%func_10 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
+    //transform.iree.gpu_distribute_shared_memory_copy %func_10 : (!transform.any_op) -> ()
+    //transform.apply_patterns to %func_10 {
+    //    transform.apply_patterns.memref.fold_memref_alias_ops
+    //    transform.apply_patterns.canonicalization
+    //    transform.apply_patterns.linalg.tiling_canonicalization
+    //  } : !transform.any_op
+    //transform.iree.apply_cse %func_10 : !transform.any_op
 
     // Swizzle shared memory
     // ==========================================

@@ -7,7 +7,7 @@ module attributes { transform.with_named_sequence } {
     // Tile and distribute to workgroups
     // ==========================================
     %tiled_attention, %forall_grid =
-    transform.structured.tile_using_forall %attention tile_sizes [1, 64]
+    transform.structured.tile_using_forall %attention tile_sizes [1, 128]
       ( mapping = [#gpu.block<x>, #gpu.block<y>] ) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
     transform.iree.populate_workgroup_count_region_using_num_threads_slice %forall_grid : (!transform.any_op) -> ()
 
@@ -30,23 +30,23 @@ module attributes { transform.with_named_sequence } {
     // Tile and decompose attention
     // ==========================================
     %attention4 = transform.structured.match ops{["iree_linalg_ext.attention"]} in %variant_op : (!transform.any_op) -> !transform.any_op
-    %acc_fill, %max_fill, %sum_fill, %inner_loop, %final_scaling, %last_truncate, %blocked_attention = transform.tile_attention %attention4 :
+    %acc_fill, %max_fill, %sum_fill, %inner_loop, %final_scaling, %last_truncate, %blocked_attention = transform.tile_attention %attention4 {tile_size = 32} :
       (!transform.any_op) -> (!transform.any_op, !transform.any_op, !transform.any_op, !transform.any_op, !transform.any_op, !transform.any_op, !transform.any_op)
     %fill_op, %first_matmul, %reduce_max, %partial_softmax, %scale_factor, %update, %reduce_sum, %truncate, %scale_acc, %second_matmul
-        = transform.decompose_tiled_attention %blocked_attention :
+        = transform.decompose_tiled_attention %blocked_attention {tile_size = 32} :
       (!transform.any_op) -> (!transform.any_op, !transform.any_op, !transform.any_op, !transform.any_op, !transform.any_op, !transform.any_op, !transform.any_op, !transform.any_op, !transform.any_op, !transform.any_op)
 
     // Promote key and value operands
     // ==========================================
-    //%promoted_first_matmul, %alloc0 = transform.iree.promote_operands %first_matmul [1]
-    //  : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
-    //%promoted_second_matmul, %alloc1 = transform.iree.promote_operands %second_matmul [1]
-    //  : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
+    %promoted_first_matmul, %alloc0 = transform.iree.promote_operands %first_matmul [1]
+      : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
+    %promoted_second_matmul, %alloc1 = transform.iree.promote_operands %second_matmul [1]
+      : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
 
     // Tile and fuse attention ops
     // ==========================================
-    %tiled_matmul, %forall = transform.structured.tile_using_forall %second_matmul tile_sizes [64] (mapping = [#gpu.warp<linear_dim_0>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
-    %tiled_reduce_sum, %forall_reduce = transform.structured.tile_using_forall %reduce_sum tile_sizes [64] (mapping = [#gpu.warp<linear_dim_0>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
+    %tiled_matmul, %forall = transform.structured.tile_using_forall %promoted_second_matmul tile_sizes [32] (mapping = [#gpu.warp<linear_dim_0>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
+    %tiled_reduce_sum, %forall_reduce = transform.structured.tile_using_forall %reduce_sum tile_sizes [32] (mapping = [#gpu.warp<linear_dim_0>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
 
 
     %f0, %loop0 = transform.structured.fuse_into_containing_op %scale_acc into %forall : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
@@ -66,7 +66,7 @@ module attributes { transform.with_named_sequence } {
     transform.iree.apply_cse %func : !transform.any_op
 
     %f7, %loop7 = transform.structured.fuse_into_containing_op %reduce_max into %loop6 : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
-    %f8, %loop8 = transform.structured.fuse_into_containing_op %first_matmul into %loop7 : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
+    %f8, %loop8 = transform.structured.fuse_into_containing_op %promoted_first_matmul into %loop7 : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
     transform.apply_patterns to %func {
       transform.apply_patterns.canonicalization
     } : !transform.any_op
@@ -82,11 +82,11 @@ module attributes { transform.with_named_sequence } {
     // Distribute fills
     // ==========================================
     %fills = transform.merge_handles %acc_fill, %max_fill, %sum_fill : !transform.any_op
-    %tiled_fill, %fill_grid = transform.structured.tile_using_forall %fills tile_sizes[64] (mapping = [#gpu.warp<linear_dim_0>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
+    %tiled_fill, %fill_grid = transform.structured.tile_using_forall %fills tile_sizes[32] (mapping = [#gpu.warp<linear_dim_0>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
 
     // Distribute last_truncate and fuse final_scaling into it
     // ==========================================
-    %tiled_truncate, %loop_truncate = transform.structured.tile_using_forall %last_truncate tile_sizes[64] (mapping = [#gpu.warp<linear_dim_0>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
+    %tiled_truncate, %loop_truncate = transform.structured.tile_using_forall %last_truncate tile_sizes[32] (mapping = [#gpu.warp<linear_dim_0>]) : (!transform.any_op) -> (!transform.any_op, !transform.any_op)
     transform.structured.fuse_into_containing_op %final_scaling into %loop_truncate : (!transform.any_op, !transform.any_op) -> (!transform.any_op, !transform.any_op)
 
     transform.apply_patterns to %func {
@@ -130,7 +130,7 @@ module attributes { transform.with_named_sequence } {
     // ===========================================================================
     %func_7 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
     transform.iree.forall_to_workgroup %func_7 : (!transform.any_op) -> ()
-    transform.iree.map_nested_forall_to_gpu_threads %func_7 workgroup_dims = [64, 1, 1] subgroup_size = 64 : (!transform.any_op) -> ()
+    transform.iree.map_nested_forall_to_gpu_threads %func_7 workgroup_dims = [64, 4, 1] subgroup_size = 64 : (!transform.any_op) -> ()
 
     transform.apply_patterns to %func_7 {
       transform.apply_patterns.memref.fold_memref_alias_ops
@@ -162,19 +162,20 @@ module attributes { transform.with_named_sequence } {
     } : !transform.any_op
     transform.apply_patterns to %func_9 {
       transform.apply_patterns.iree.apply_transfer_write_patterns
+      //transform.apply_patterns.iree.apply_reordering_patterns
     } : !transform.any_op
     %transformed_func = transform.iree.simt_vector_distribution %func_9 : (!transform.any_op) -> (!transform.any_op)
 
     // Distribute shared memory copies
     // ==========================================
-    //%func_10 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
-    //transform.iree.gpu_distribute_shared_memory_copy %func_10 : (!transform.any_op) -> ()
-    //transform.apply_patterns to %func_10 {
-    //    transform.apply_patterns.memref.fold_memref_alias_ops
-    //    transform.apply_patterns.canonicalization
-    //    transform.apply_patterns.linalg.tiling_canonicalization
-    //  } : !transform.any_op
-    //transform.iree.apply_cse %func_10 : !transform.any_op
+    %func_10 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
+    transform.iree.gpu_distribute_shared_memory_copy %func_10 : (!transform.any_op) -> ()
+    transform.apply_patterns to %func_10 {
+        transform.apply_patterns.memref.fold_memref_alias_ops
+        transform.apply_patterns.canonicalization
+        transform.apply_patterns.linalg.tiling_canonicalization
+      } : !transform.any_op
+    transform.iree.apply_cse %func_10 : !transform.any_op
 
     // Swizzle shared memory
     // ==========================================
@@ -184,6 +185,21 @@ module attributes { transform.with_named_sequence } {
     //    transform.apply_patterns.canonicalization
     //  } : !transform.any_op
     //transform.iree.optimize_shared_memory_reads_and_writes %func_20 : (!transform.any_op) -> ()
+
+    // Do multi-buffering (num_buffers = pipeline_depth + 1 for loadStoreStage0 (strategy = 1))
+    // For now, pipeline depth = 1
+    // ==========================================
+    //%func_4 = transform.structured.match ops{["func.func"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
+    //transform.iree.gpu_multi_buffering %func_4 {num_buffers = 2, skip_override_analysis = true} : (!transform.any_op) -> ()
+    //transform.apply_patterns to %func_4 {
+    //    transform.apply_patterns.memref.fold_memref_alias_ops
+    //    transform.apply_patterns.canonicalization
+    //  } : !transform.any_op
+
+    // Do pipelining
+    // ==========================================
+    //%for_op = transform.structured.match ops{["scf.for"]} in %variant_op_3 : (!transform.any_op) -> !transform.any_op
+    //%pipelined_for_op = transform.iree.gpu_pipelining %for_op {depth = 1, strategy = 1, peel_epilogue} : (!transform.any_op) -> (!transform.any_op)
 
     transform.yield
   }

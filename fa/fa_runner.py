@@ -16,6 +16,7 @@ def get_rocm_flags(args):
       f'--iree-rocm-target-chip={args.chip}',
       '--iree-rocm-link-bc=true',
       '--iree-rocm-bc-dir=/opt/rocm/amdgcn/bitcode',
+      '--iree-rocm-waves-per-eu=2',
     ]
 
 class Hyperparameters:
